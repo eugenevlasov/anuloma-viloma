@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Анулома-вилома">
+<meta name="theme-color" content="#12141c">
+<title>Анулома-вилома · таймер</title>
+<style>
+  :root {
+    --bg: #12141c;
+    --bg-soft: #1b1e2a;
+    --fg: #e8e6df;
+    --muted: #8a90a6;
+    --accent: #7fb3a6;
+    --inhale: #6fae9c;   /* вдох */
+    --hold:   #b0a06a;   /* задержка */
+    --exhale: #8f8fc4;   /* выдох */
+    --active: #f2efe6;
+    --border: #2a2e3c;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    height: 100%;
+  }
+
+  body {
+    background: radial-gradient(ellipse at top, #191c28 0%, var(--bg) 70%);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100%;
+    padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+             max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .screen { display: none; width: 100%; max-width: 460px; }
+  .screen.active { display: block; }
+
+  h1 {
+    font-weight: 300;
+    font-size: 1.6rem;
+    letter-spacing: 0.04em;
+    text-align: center;
+    margin: 0 0 4px;
+  }
+  .subtitle {
+    text-align: center;
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin: 0 0 32px;
+  }
+
+  /* --- Экран настроек --- */
+  .field { margin-bottom: 20px; }
+  .field label {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 8px;
+    letter-spacing: 0.03em;
+  }
+  .field input[type="number"] {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 1.1rem;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--fg);
+    outline: none;
+    transition: border-color .2s;
+  }
+  .field input[type="number"]:focus { border-color: var(--accent); }
+  .field .hint { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
+
+  .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 28px;
+    color: var(--muted);
+    font-size: 0.9rem;
+    cursor: pointer;
+    user-select: none;
+  }
+  .checkbox-row input { width: 18px; height: 18px; accent-color: var(--accent); }
+
+  .plan-preview {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    font-size: 0.85rem;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 28px;
+  }
+  .plan-preview b { color: var(--fg); font-weight: 500; }
+
+  .error {
+    color: #d98b8b;
+    font-size: 0.85rem;
+    min-height: 1.2em;
+    margin-bottom: 12px;
+    text-align: center;
+  }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    border-radius: 12px;
+    transition: background .2s, opacity .2s, transform .05s;
+  }
+  button:active { transform: translateY(1px); }
+
+  .btn-primary {
+    width: 100%;
+    padding: 16px;
+    font-size: 1.05rem;
+    letter-spacing: 0.05em;
+    background: var(--accent);
+    color: #10231f;
+    font-weight: 500;
+  }
+  .btn-primary:hover { background: #8ec2b5; }
+
+  /* --- Экран тренировки --- */
+  #trainer { text-align: center; }
+
+  .cycle-counter {
+    color: var(--muted);
+    font-size: 0.95rem;
+    letter-spacing: 0.05em;
+    margin-bottom: 24px;
+  }
+
+  .circle-wrap {
+    position: relative;
+    width: 260px;
+    height: 260px;
+    margin: 0 auto 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .circle {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: rgba(127,179,166,0.10);
+    border: 2px solid var(--accent);
+    transform: scale(0.55);
+    transition: transform linear, background-color .6s, border-color .6s;
+    will-change: transform;
+  }
+  .circle-inner {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+  .phase-label {
+    font-size: 1.1rem;
+    font-weight: 300;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fg);
+  }
+  .countdown {
+    font-size: 4.2rem;
+    font-weight: 200;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Ноздри */
+  .nostrils {
+    display: flex;
+    justify-content: center;
+    gap: 60px;
+    margin-bottom: 36px;
+  }
+  .nostril {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    opacity: 0.35;
+    transition: opacity .4s, transform .4s;
+  }
+  .nostril .dot {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background-color .4s, box-shadow .4s;
+  }
+  .nostril .name {
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+  .nostril.active {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+  .nostril.active .dot {
+    background: var(--active);
+    box-shadow: 0 0 16px 2px rgba(242,239,230,0.6);
+  }
+  .nostril.active .name { color: var(--fg); }
+
+  .controls {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+  .btn-ghost {
+    flex: 1;
+    max-width: 160px;
+    padding: 13px;
+    font-size: 0.95rem;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    color: var(--fg);
+    letter-spacing: 0.03em;
+  }
+  .btn-ghost:hover { background: #232736; }
+
+  /* --- Оверлей завершения --- */
+  #done {
+    text-align: center;
+  }
+  #done .big { font-size: 2rem; font-weight: 300; margin-bottom: 8px; }
+  #done .sub { color: var(--muted); margin-bottom: 32px; }
+</style>
+</head>
+<body>
+
+  <!-- Экран настроек -->
+  <section id="setup" class="screen active">
+    <h1>Анулома-вилома</h1>
+    <p class="subtitle">Попеременное дыхание · соотношение 1 : 4 : 2</p>
+
+    <div class="field">
+      <label for="n-input">Базовое время вдоха, секунд (N)</label>
+      <input type="number" id="n-input" min="1" max="60" step="1" value="4" inputmode="numeric">
+      <div class="hint">Вдох — N сек, задержка — 4N сек, выдох — 2N сек.</div>
+    </div>
+
+    <div class="field">
+      <label for="reps-input">Количество повторений</label>
+      <input type="number" id="reps-input" min="1" max="108" step="1" value="10" inputmode="numeric">
+    </div>
+
+    <label class="checkbox-row">
+      <input type="checkbox" id="sound-input" checked>
+      Звуковые сигналы (тик каждую секунду + смена фазы)
+    </label>
+
+    <div class="plan-preview" id="plan-preview"></div>
+
+    <div class="error" id="setup-error"></div>
+    <button class="btn-primary" id="start-btn">Начать</button>
+  </section>
+
+  <!-- Экран тренировки -->
+  <section id="trainer" class="screen">
+    <div class="cycle-counter" id="cycle-counter">Цикл 1 из 1</div>
+
+    <div class="circle-wrap">
+      <div class="circle" id="circle"></div>
+      <div class="circle-inner">
+        <div class="phase-label" id="phase-label">Вдох</div>
+        <div class="countdown" id="countdown">0</div>
+      </div>
+    </div>
+
+    <div class="nostrils">
+      <div class="nostril" id="nostril-left">
+        <div class="dot"></div>
+        <div class="name">Левая</div>
+      </div>
+      <div class="nostril" id="nostril-right">
+        <div class="dot"></div>
+        <div class="name">Правая</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn-ghost" id="pause-btn">Пауза</button>
+      <button class="btn-ghost" id="stop-btn">Стоп</button>
+    </div>
+  </section>
+
+  <!-- Оверлей завершения -->
+  <section id="done" class="screen">
+    <div class="big">Готово 🙏</div>
+    <div class="sub">Практика завершена</div>
+    <button class="btn-primary" id="restart-btn">Заново</button>
+  </section>
+
+<script>
+"use strict";
+
+// ---------- Модель ----------
+// Единая временная шкала: практика описывается плоским списком фаз с абсолютными
+// смещениями от старта. Позиция вычисляется из реального времени — поэтому визуал
+// можно пересчитать после разблокировки экрана, а звук — запланировать заранее.
+const state = {
+  n: 4,
+  reps: 10,
+  soundOn: true,
+  timeline: [],       // [{cycleIndex, type, nostril, startOffset, dur}, ...]
+  duration: 0,        // общая длительность практики в секундах
+  originPerf: 0,      // performance.now() старта сессии (включая обратный отсчёт)
+  startPerf: 0,       // performance.now() старта дыхания (сдвигается при паузе)
+  pausedElapsed: 0,   // сколько секунд дыхания прошло к моменту паузы
+  currentPhaseIdx: -1,// индекс отображаемой сейчас фазы в timeline
+  running: false,
+  paused: false,
+  prerollActive: false, // идёт обратный отсчёт перед стартом
+  lastShownSec: null, // для обновления цифр отсчёта
+  rafId: null,
+};
+
+const PREROLL_SEC = 3; // длительность обратного отсчёта перед практикой
+
+// ---------- Построение расписания фаз ----------
+// Один цикл — обе ноздри: вдох левой → задержка → выдох правой,
+// затем вдох правой → задержка → выдох левой (классическая анулома-вилома).
+function buildPhases(n) {
+  return [
+    { type: 'inhale', dur: n,     nostril: 'left'  },
+    { type: 'hold',   dur: 4 * n, nostril: null    },
+    { type: 'exhale', dur: 2 * n, nostril: 'right' },
+    { type: 'inhale', dur: n,     nostril: 'right' },
+    { type: 'hold',   dur: 4 * n, nostril: null    },
+    { type: 'exhale', dur: 2 * n, nostril: 'left'  },
+  ];
+}
+
+// ---------- Звук: вся дорожка практики рендерится в один аудиофайл ----------
+// На iOS Web Audio засыпает при блокировке экрана, а <audio>-элемент продолжает
+// играть (как музыкальный плеер). Поэтому заранее синтезируем PCM со всеми
+// сигналами (обратный отсчёт + тики + смены фаз) и проигрываем одним <audio>.
+// Категория 'playback' — чтобы звук шёл и в беззвучном режиме (Safari 16.4+).
+const TICK_FREQ = 880, TICK_MS = 60,  TICK_GAIN = 0.18;
+const PHASE_FREQ = 440, PHASE_MS = 200, PHASE_GAIN = 0.38;
+
+let audioEl = null;
+
+function setPlaybackSession() {
+  try {
+    if (navigator.audioSession) navigator.audioSession.type = 'playback';
+  } catch (e) { /* API недоступен — не критично */ }
+}
+
+function getAudioEl() {
+  if (!audioEl) {
+    audioEl = document.createElement('audio');
+    audioEl.setAttribute('playsinline', '');
+    audioEl.preload = 'auto';
+  }
+  return audioEl;
+}
+
+// Рендер PCM всей практики (включая обратный отсчёт) в WAV data URI.
+function renderSessionWav() {
+  const total = PREROLL_SEC + state.duration + 0.5; // +небольшой хвост
+  // Частоту дискретизации подбираем так, чтобы data URI не разрастался
+  // (пол — 4000 Гц, сигналы 440/880 Гц ниже Найквиста). Цель ≈ ≤6 МБ PCM.
+  let rate = 8000;
+  const cap = 6000000;
+  if (total * rate * 2 > cap) rate = Math.max(4000, Math.floor(cap / (total * 2)));
+
+  // Предохранитель: очень длинные практики не рендерим целиком, иначе data URI
+  // раздуется на десятки/сотни МБ. Звук покроет начало, визуал идёт до конца.
+  const MAX_SAMPLES = 8000000; // ~16 МБ PCM ≈ 33 мин при 4000 Гц
+  let len = Math.ceil(total * rate);
+  if (len > MAX_SAMPLES) {
+    len = MAX_SAMPLES;
+    console.warn('Практика длиннее лимита фонового звука — озвучено только начало.');
+  }
+  const samples = new Float32Array(len);
+
+  function addBeep(atSec, freq, durMs, gain) {
+    const start = Math.floor(atSec * rate);
+    const dur = durMs / 1000;
+    const n = Math.floor(dur * rate);
+    const decay = dur / 3;
+    for (let i = 0; i < n; i++) {
+      const idx = start + i;
+      if (idx < 0 || idx >= len) continue;
+      const t = i / rate;
+      const env = Math.min(1, t / 0.008) * Math.exp(-t / decay);
+      samples[idx] += Math.sin(2 * Math.PI * freq * t) * gain * env;
+    }
+  }
+
+  if (state.soundOn) {
+    // Обратный отсчёт: тики совпадают с визуальной сменой 3→2 и 2→1.
+    addBeep(1, TICK_FREQ, TICK_MS, TICK_GAIN);
+    addBeep(2, TICK_FREQ, TICK_MS, TICK_GAIN);
+    // Дыхание
+    for (const ph of state.timeline) {
+      addBeep(PREROLL_SEC + ph.startOffset, PHASE_FREQ, PHASE_MS, PHASE_GAIN);
+      for (let s = 1; s < ph.dur; s++) {
+        addBeep(PREROLL_SEC + ph.startOffset + s, TICK_FREQ, TICK_MS, TICK_GAIN);
+      }
+    }
+  }
+  return encodeWav(samples, rate);
+}
+
+// Float32 [-1..1] → 16-битный моно WAV (data URI).
+function encodeWav(samples, rate) {
+  const len = samples.length;
+  const dataSize = len * 2;
+  const buf = new ArrayBuffer(44 + dataSize);
+  const v = new DataView(buf);
+  const wr = (off, s) => { for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)); };
+  wr(0, 'RIFF'); v.setUint32(4, 36 + dataSize, true); wr(8, 'WAVE');
+  wr(12, 'fmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true); v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true);
+  wr(36, 'data'); v.setUint32(40, dataSize, true);
+  for (let i = 0; i < len; i++) {
+    let s = samples[i];
+    if (s > 1) s = 1; else if (s < -1) s = -1;
+    v.setInt16(44 + i * 2, Math.round(s < 0 ? s * 32768 : s * 32767), true);
+  }
+  // ArrayBuffer → base64 порциями (btoa не любит слишком длинные строки).
+  const bytes = new Uint8Array(buf);
+  let bin = '';
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+  }
+  return 'data:audio/wav;base64,' + btoa(bin);
+}
+
+// ---------- Wake Lock (экран не гаснет во время практики) ----------
+let wakeLock = null;
+
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLock = await navigator.wakeLock.request('screen');
+    }
+  } catch (e) {
+    // Не критично: например, вкладка не в фокусе или API недоступен.
+  }
+}
+
+function releaseWakeLock() {
+  if (wakeLock) {
+    wakeLock.release().catch(() => {});
+    wakeLock = null;
+  }
+}
+
+// ---------- DOM ----------
+const el = {
+  setup: document.getElementById('setup'),
+  trainer: document.getElementById('trainer'),
+  done: document.getElementById('done'),
+  nInput: document.getElementById('n-input'),
+  repsInput: document.getElementById('reps-input'),
+  soundInput: document.getElementById('sound-input'),
+  planPreview: document.getElementById('plan-preview'),
+  setupError: document.getElementById('setup-error'),
+  startBtn: document.getElementById('start-btn'),
+  cycleCounter: document.getElementById('cycle-counter'),
+  circle: document.getElementById('circle'),
+  phaseLabel: document.getElementById('phase-label'),
+  countdown: document.getElementById('countdown'),
+  nostrilLeft: document.getElementById('nostril-left'),
+  nostrilRight: document.getElementById('nostril-right'),
+  pauseBtn: document.getElementById('pause-btn'),
+  stopBtn: document.getElementById('stop-btn'),
+  restartBtn: document.getElementById('restart-btn'),
+};
+
+const PHASE_NAMES = { inhale: 'Вдох', hold: 'Задержка', exhale: 'Выдох' };
+const PHASE_COLORS = {
+  inhale: getComputedStyle(document.documentElement).getPropertyValue('--inhale').trim(),
+  hold:   getComputedStyle(document.documentElement).getPropertyValue('--hold').trim(),
+  exhale: getComputedStyle(document.documentElement).getPropertyValue('--exhale').trim(),
+};
+const ACCENT_COLOR = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+
+function showScreen(name) {
+  el.setup.classList.toggle('active', name === 'setup');
+  el.trainer.classList.toggle('active', name === 'trainer');
+  el.done.classList.toggle('active', name === 'done');
+}
+
+// ---------- Превью плана на экране настроек ----------
+function updatePlanPreview() {
+  const n = parseInt(el.nInput.value, 10);
+  const reps = parseInt(el.repsInput.value, 10);
+  if (!Number.isFinite(n) || !Number.isFinite(reps) || n < 1 || reps < 1) {
+    el.planPreview.textContent = '';
+    return;
+  }
+  const halfSec = n + 4 * n + 2 * n;   // одна ноздря
+  const cycleSec = halfSec * 2;        // полный цикл — обе ноздри
+  const totalSec = cycleSec * reps;
+  el.planPreview.innerHTML =
+    `Полуцикл: вдох <b>${n}с</b> → задержка <b>${4 * n}с</b> → выдох <b>${2 * n}с</b> = <b>${halfSec}с</b>.<br>` +
+    `Цикл (обе ноздри): <b>${cycleSec}с</b>. Всего: <b>${reps}</b> × ${cycleSec}с ≈ <b>${formatDuration(totalSec)}</b>.`;
+}
+
+function formatDuration(sec) {
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  if (m === 0) return `${s} сек`;
+  return s === 0 ? `${m} мин` : `${m} мин ${s} сек`;
+}
+
+// ---------- Обратный отсчёт перед практикой (визуал; звук — из дорожки) ----------
+function runPreRoll(onDone) {
+  state.prerollActive = true;
+
+  // Нейтральный вид круга, ноздри не подсвечены
+  el.phaseLabel.textContent = 'Приготовьтесь';
+  el.circle.style.transitionDuration = '0s';
+  el.circle.style.transform = 'scale(0.55)';
+  el.circle.style.borderColor = ACCENT_COLOR;
+  el.circle.style.backgroundColor = hexToRgba(ACCENT_COLOR, 0.10);
+  renderNostrils(null);
+  el.countdown.textContent = PREROLL_SEC;
+
+  function loop() {
+    if (!state.running) return; // прервано «Стоп»
+    const remaining = PREROLL_SEC - (performance.now() - state.originPerf) / 1000;
+    if (remaining <= 0) {
+      state.prerollActive = false;
+      onDone();
+      return;
+    }
+    el.countdown.textContent = Math.max(1, Math.ceil(remaining));
+    state.rafId = requestAnimationFrame(loop);
+  }
+  state.rafId = requestAnimationFrame(loop);
+}
+
+// ---------- Временная шкала ----------
+function buildTimeline(reps, n) {
+  const tl = [];
+  let offset = 0;
+  for (let c = 0; c < reps; c++) {
+    for (const p of buildPhases(n)) {
+      tl.push({ cycleIndex: c, type: p.type, nostril: p.nostril, startOffset: offset, dur: p.dur });
+      offset += p.dur;
+    }
+  }
+  return { timeline: tl, duration: offset };
+}
+
+// Индекс фазы для заданного момента (сек от старта дыхания).
+function phaseIndexAt(elapsed) {
+  const tl = state.timeline;
+  for (let i = tl.length - 1; i >= 0; i--) {
+    if (elapsed >= tl[i].startOffset) return i;
+  }
+  return 0;
+}
+
+// ---------- Рендер визуала ----------
+function renderNostrils(nostril) {
+  el.nostrilLeft.classList.toggle('active', nostril === 'left');
+  el.nostrilRight.classList.toggle('active', nostril === 'right');
+}
+
+function targetScale(type) { return type === 'exhale' ? 0.55 : 1.0; }
+
+// Масштаб круга в текущей точке фазы (для корректного возобновления/пересчёта).
+function scaleAt(type, elapsedInPhase, dur) {
+  const p = Math.min(1, Math.max(0, elapsedInPhase / dur));
+  if (type === 'inhale') return 0.55 + 0.45 * p;
+  if (type === 'exhale') return 1.0 - 0.45 * p;
+  return 1.0; // hold
+}
+
+// Ставит круг в текущее состояние и плавно доводит до конца фазы.
+function animateCircle(type, elapsedInPhase, dur) {
+  const from = scaleAt(type, elapsedInPhase, dur);
+  const remaining = Math.max(0, dur - elapsedInPhase);
+  el.circle.style.transitionDuration = '0s';
+  el.circle.style.transform = `scale(${from})`;
+  void el.circle.offsetWidth; // reflow, чтобы применить стартовое значение
+  el.circle.style.transitionDuration = remaining + 's';
+  el.circle.style.transform = `scale(${targetScale(type)})`;
+}
+
+// Вход в фазу: цвет, подпись, ноздри, счётчик цикла, анимация круга.
+function enterPhaseVisual(idx, elapsedInPhase) {
+  const ph = state.timeline[idx];
+  const color = PHASE_COLORS[ph.type];
+  el.circle.style.borderColor = color;
+  el.circle.style.backgroundColor = hexToRgba(color, 0.10);
+  el.phaseLabel.textContent = PHASE_NAMES[ph.type];
+  renderNostrils(ph.nostril);
+  el.cycleCounter.textContent = `Цикл ${ph.cycleIndex + 1} из ${state.reps}`;
+  animateCircle(ph.type, elapsedInPhase, ph.dur);
+}
+
+// ---------- Движок таймера (визуал; звук запланирован заранее) ----------
+function tick() {
+  if (!state.running || state.paused) return;
+
+  const elapsed = (performance.now() - state.startPerf) / 1000;
+  if (elapsed >= state.duration) { finish(); return; }
+
+  const idx = phaseIndexAt(elapsed);
+  const ph = state.timeline[idx];
+  const elapsedInPhase = elapsed - ph.startOffset;
+  const remaining = ph.dur - elapsedInPhase;
+
+  if (idx !== state.currentPhaseIdx) {
+    state.currentPhaseIdx = idx;
+    state.lastShownSec = null;
+    enterPhaseVisual(idx, elapsedInPhase);
+  }
+
+  const shown = Math.max(1, Math.ceil(remaining));
+  if (shown !== state.lastShownSec) {
+    state.lastShownSec = shown;
+    el.countdown.textContent = shown;
+  }
+
+  state.rafId = requestAnimationFrame(tick);
+}
+
+// Пересчёт визуала после возврата из фона / разблокировки экрана.
+function resyncVisuals() {
+  const elapsed = (performance.now() - state.startPerf) / 1000;
+  if (elapsed >= state.duration) { finish(); return; }
+  const idx = phaseIndexAt(elapsed);
+  const ph = state.timeline[idx];
+  const elapsedInPhase = elapsed - ph.startOffset;
+  state.currentPhaseIdx = idx;
+  state.lastShownSec = null;
+  enterPhaseVisual(idx, elapsedInPhase);
+  el.countdown.textContent = Math.max(1, Math.ceil(ph.dur - elapsedInPhase));
+}
+
+function finish() {
+  stopTimerLoop();
+  if (audioEl) audioEl.pause();
+  releaseWakeLock();
+  state.running = false;
+  state.paused = false;
+  state.prerollActive = false;
+  showScreen('done');
+}
+
+function stopTimerLoop() {
+  if (state.rafId !== null) {
+    cancelAnimationFrame(state.rafId);
+    state.rafId = null;
+  }
+}
+
+// ---------- Старт / пауза / стоп ----------
+function startTraining() {
+  const n = parseInt(el.nInput.value, 10);
+  const reps = parseInt(el.repsInput.value, 10);
+
+  el.setupError.textContent = '';
+  if (!Number.isInteger(n) || n < 1) {
+    el.setupError.textContent = 'Введите N — целое число секунд ≥ 1.';
+    return;
+  }
+  if (!Number.isInteger(reps) || reps < 1) {
+    el.setupError.textContent = 'Введите количество повторений ≥ 1.';
+    return;
+  }
+
+  state.n = n;
+  state.reps = reps;
+  state.soundOn = el.soundInput.checked;
+
+  const built = buildTimeline(reps, n);
+  state.timeline = built.timeline;
+  state.duration = built.duration;
+  state.currentPhaseIdx = -1;
+  state.running = true;
+  state.paused = false;
+
+  // Звук: готовим единую дорожку и запускаем её в рамках жеста пользователя,
+  // чтобы она играла и в беззвучном режиме, и при заблокированном экране.
+  setPlaybackSession();
+  const a = getAudioEl();
+  a.src = renderSessionWav();
+  a.currentTime = 0;
+  a.play().catch(() => {});
+
+  requestWakeLock();                   // не даём экрану гаснуть во время практики
+
+  state.originPerf = performance.now();
+
+  showScreen('trainer');
+  el.cycleCounter.textContent = `Цикл 1 из ${reps}`;
+  el.pauseBtn.textContent = 'Пауза';
+
+  // Сначала обратный отсчёт, затем дыхание (обе фазы уже озвучены в дорожке)
+  runPreRoll(startBreathing);
+}
+
+function startBreathing() {
+  state.startPerf = state.originPerf + PREROLL_SEC * 1000;
+  state.currentPhaseIdx = -1;
+  state.lastShownSec = null;
+  state.rafId = requestAnimationFrame(tick);
+}
+
+function pauseTraining() {
+  if (!state.running || state.prerollActive || state.paused) return;
+  // Фиксируем прошедшее время дыхания
+  state.pausedElapsed = (performance.now() - state.startPerf) / 1000;
+  state.paused = true;
+  stopTimerLoop();
+  if (audioEl) audioEl.pause();
+  el.pauseBtn.textContent = 'Продолжить';
+  // Замораживаем анимацию круга на текущем масштабе
+  const cs = getComputedStyle(el.circle).transform;
+  el.circle.style.transitionDuration = '0s';
+  el.circle.style.transform = cs;
+}
+
+function resumeTraining() {
+  if (!state.running || state.prerollActive || !state.paused) return;
+  // Сдвигаем часы на величину паузы — позиция на шкале не меняется
+  state.startPerf = performance.now() - state.pausedElapsed * 1000;
+  state.originPerf = state.startPerf - PREROLL_SEC * 1000;
+  state.paused = false;
+  el.pauseBtn.textContent = 'Пауза';
+  if (audioEl) {
+    audioEl.currentTime = PREROLL_SEC + state.pausedElapsed; // синхронизируем дорожку
+    audioEl.play().catch(() => {});
+  }
+  resyncVisuals();
+  state.rafId = requestAnimationFrame(tick);
+}
+
+function togglePause() {
+  if (!state.running || state.prerollActive) return; // во время отсчёта пауза недоступна
+  if (state.paused) resumeTraining();
+  else pauseTraining();
+}
+
+function stopTraining() {
+  stopTimerLoop();
+  if (audioEl) { audioEl.pause(); audioEl.currentTime = 0; }
+  releaseWakeLock();
+  state.running = false;
+  state.paused = false;
+  state.prerollActive = false;
+  showScreen('setup');
+  updatePlanPreview();
+}
+
+// ---------- Утилиты ----------
+function hexToRgba(hex, alpha) {
+  const h = hex.replace('#', '');
+  const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const r = parseInt(full.substring(0, 2), 16);
+  const g = parseInt(full.substring(2, 4), 16);
+  const b = parseInt(full.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// ---------- События ----------
+el.startBtn.addEventListener('click', startTraining);
+el.pauseBtn.addEventListener('click', togglePause);
+el.stopBtn.addEventListener('click', stopTraining);
+el.restartBtn.addEventListener('click', () => { showScreen('setup'); updatePlanPreview(); });
+el.nInput.addEventListener('input', updatePlanPreview);
+el.repsInput.addEventListener('input', updatePlanPreview);
+
+// Блокировка экрана / уход в фон: JS замирает, но звук идёт из заранее
+// запланированной аудио-шкалы. При возврате берём Wake Lock заново и
+// пересчитываем визуал по реально прошедшему времени.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  if (state.running && !state.paused && !state.prerollActive) {
+    requestWakeLock();
+    stopTimerLoop();
+    resyncVisuals();
+    state.rafId = requestAnimationFrame(tick);
+  }
+});
+
+// Инициализация
+updatePlanPreview();
+</script>
+</body>
+</html>
